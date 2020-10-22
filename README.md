@@ -15,4 +15,5 @@ When it fails after 3 times it tries the GPS for a time sync.
 Then there is also the inclusion of DST! My time will change/ update itself when DST is enabled and the month falls within either summer (+2) or wintertime (+1).
 Since NTP works with UTC time only.
 
-Perhaps my code can be optimized, still new to Arduino (C++) coding.
+I've tried to keep the code as close as can be to the original from GRA-AFCH.
+Perhaps my code can be optimized, still new to Arduino (C++) coding, if so feel free to let me know.
