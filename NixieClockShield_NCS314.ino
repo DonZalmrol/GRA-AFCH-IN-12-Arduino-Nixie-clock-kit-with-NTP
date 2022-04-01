@@ -1,55 +1,59 @@
-const String FirmwareVersion = "019003";
+const String FirmwareVersion = "019005";
 #define HardwareVersion "NCS314 for HW 2.x"
 //Format                _X.XXX_
-//Updated and optimized code + bug fixing by Don-Zalmrol
-//1.93 21.03.2022
-//NIXIE CLOCK SHIELD NCS314 v 2.x by GRA & AFCH (fominalec@gmail.com)
-//1.91 15.10.2020
-//Added NTP by Don-Zalmrol
-//1.90 08.06.2020
-//Fixed: GPS timezone issue: added breakTime(now(), tm) to adjustTime function at Time.cpp
-//1.89 03.04.2020
-//Dots sync with seconds
-//1.88 30.03.2020
-//GPS synchronization algorithm has been changed (again)
-//1.86 23.02.2020
-//GPS synchronization algorithm changed
-//1.85.3 23.02.2020
-//Added: DS3231 internal temperature sensor self test: 5 beeps if fail.
-//1.85.2 21.02.2020
-//GPS parser has been replaced by NEOGPS
-//1.85 24.04.2019
-//Fixed: Bug with time zones more than +-9
-//1.84 08.04.2019
-//LEDs functions moved to external file
-//LEDs freezing while music (or sound) played.
-//SPI Setup moved driver's file
-//1.83 02.08.2018 (Driver v 1.1 is required)
-//Fixed: Temp. reading speed fixed
-//Fixed: Dots mixed up (driver was updated to v. 1.1)
-//Fixed: RGB LEDs reading from EEPROM
-//Fixed: Check for entering data from GPS in range
-//1.82 18.07.2018 Dual Date Format
-//1.81 18.02.2018 Temp. sensor present analyze
-//1.80 06.08.2017
-//Added: Date and Time GPS synchronization
-//1.70 30.07.2017
-//Added  IR remote control support (Sony RM-X151) ("MODE", "UP", "DOWN")
-//1.60 24_07_2017
-//Added: Temperature reading mode in menu and slot machine transaction
-//1.0.31 27_04_2017
-//Added: antipoisoning effect - slot machine
-//1.021 31.01.2017
-//Added: time synchronizing each 10 seconds
-//Fixed: not correct time reading from RTC while start up
-//1.02 17.10.2016
-//Fixed: RGB color controls
-//Update to Arduino IDE 1.6.12 (Time.h replaced to TimeLib.h)
-//1.01
-//Added RGB LEDs lock(by UP and Down Buttons)
-//Added Down and Up buttons pause and resume self testing
-//25.09.2016 update to HW ver 1.1
-//25.05.2016
+// Optimized (final) code
+// 1.95 31.03.2022
+// Fixed and optimized DST by Don-Zalmrol
+// 1.94 27.03.2022
+// Removed IR, updated and optimized code + bug fixing by Don-Zalmrol
+// 1.93 21.03.2022
+// NIXIE CLOCK SHIELD NCS314 v 2.x by GRA & AFCH (fominalec@gmail.com)
+// 1.91 15.10.2020
+// Added NTP by Don-Zalmrol
+// 1.90 08.06.2020
+// Fixed: GPS timezone issue: added breakTime(now(), tm) to adjustTime function at Time.cpp
+// 1.89 03.04.2020
+// Dots sync with seconds
+// 1.88 30.03.2020
+// GPS synchronization algorithm has been changed (again)
+// 1.86 23.02.2020
+// GPS synchronization algorithm changed
+// 1.85.3 23.02.2020
+// Added: DS3231 internal temperature sensor self test: 5 beeps if fail.
+// 1.85.2 21.02.2020
+// GPS parser has been replaced by NEOGPS
+// 1.85 24.04.2019
+// Fixed: Bug with time zones more than +-9
+// 1.84 08.04.2019
+// LEDs functions moved to external file
+// LEDs freezing while music (or sound) played.
+// SPI Setup moved driver's file
+// 1.83 02.08.2018 (Driver v 1.1 is required)
+// Fixed: Temp. reading speed fixed
+// Fixed: Dots mixed up (driver was updated to v. 1.1)
+// Fixed: RGB LEDs reading from EEPROM
+// Fixed: Check for entering data from GPS in range
+// 1.82 18.07.2018 Dual Date Format
+// 1.81 18.02.2018 Temp. sensor present analyze
+// 1.80 06.08.2017
+// Added: Date and Time GPS synchronization
+// 1.70 30.07.2017
+// Added  IR remote control support (Sony RM-X151) ("MODE", "UP", "DOWN")
+// 1.60 24_07_2017
+// Added: Temperature reading mode in menu and slot machine transaction
+// 1.0.31 27_04_2017
+// Added: antipoisoning effect - slot machine
+// 1.021 31.01.2017
+// Added: time synchronizing each 10 seconds
+// Fixed: not correct time reading from RTC while start up
+// 1.02 17.10.2016
+// Fixed: RGB color controls
+// Update to Arduino IDE 1.6.12 (Time.h replaced to TimeLib.h)
+// 1.01
+// Added RGB LEDs lock(by UP and Down Buttons)
+// Added Down and Up buttons pause and resume self testing
+// 25.09.2016 update to HW ver 1.1
+// 25.05.2016
 
 // How many tubes (excluding neons) do you got?
 //#define tubes8
@@ -75,6 +79,7 @@ const String FirmwareVersion = "019003";
 #include <WiFiEsp.h>
 #include <WiFiEspUdp.h>
 #include <Timezone.h>
+#include <NMEAGPS.h>
 #include "doIndication314_HW2.x.h"
 #include "arduino_secrets.h"
 
@@ -89,23 +94,18 @@ unsigned long previousMillis_1 = 0, previousMillis_2 = 0;
 char timeServer[] = TIMESERVER;     // NTP server
 unsigned int localPort = LOCALPORT; // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48;     // NTP timestamp is in the first 48 bytes of the message
-bool NTP_Package_Valid = false;     // NTP Package valid bool
-const int UDP_TIMEOUT = 2000;       // timeout in miliseconds to wait for an UDP packet to arrive, original value = 3000
+const int UDP_TIMEOUT = 3000;       // timeout in miliseconds to wait for an UDP packet to arrive, original value = 3000, optimized = 2000
 byte packetBuffer[NTP_PACKET_SIZE]; // buffer to hold incoming and outgoing packets
 
 // A UDP instance to let us send and receive packets over UDP
 WiFiEspUDP Udp;
 
 // Set to false to disable NTP and enable GPS
-bool NTPSyncEnabled = true;
+bool NTPSyncEnabled = NTP_ENABLED;
 
 // Enable Daylight Savings Time (DST)
-bool DSTEnabled = true;
-
-// NTP time is in UTC. Set offset in seconds
-int GMTOffSet = GMTOFFSET;
-//int GMTOffSet = 1;
-long timeOffset = (GMTOffSet * 60UL * 60UL); // Example: (1 * 60 * 60) -> GMT +1
+bool DSTEnabled = DST_ENABLED;
+int DST = 0;
 
 // NTP retry counter
 int NTPRetryCount = 0;
@@ -117,13 +117,10 @@ bool initialBootDone = false;
 // ************
 #define GPS_SYNC_INTERVAL 1800000 // 30 minutes in milliseconds
 //#define GPS_SYNC_INTERVAL 60000 // 1 minute in milliseconds
-//#define GPS_SYNC_INTERVAL 120000 // 2 minute in milliseconds
+unsigned long GPS_Sync_Interval = 60UL * 1000UL; // 1 minutes
 unsigned long Last_Time_GPS_Sync = 0;
 bool GPS_Sync_Flag = 1;
 bool gpsConnect = false;
-//uint32_t GPS_Sync_Interval=120000; // 2 minutes
-uint32_t GPS_Sync_Interval = 60000; // 1 minutes
-#include <NMEAGPS.h>
 static NMEAGPS  gps;
 static gps_fix  fix;
 
@@ -255,6 +252,7 @@ byte LEDsBlueValueEEPROMAddress = 10;
 byte DegreesFormatEEPROMAddress = 11;
 byte HoursOffsetEEPROMAddress = 12;
 byte DateFormatEEPROMAddress = 13;
+byte DSTEEPROMAddress = 14;
 
 //buttons pins declarations
 ClickButton setButton(pinSet, LOW, CLICKBTN_PULLUP);
@@ -289,7 +287,7 @@ int fireforks[] = {0, 0, 1, //1
                    0, -1, 0
                   }; //array with RGB rules (0 - do nothing, -1 - decrese, +1 - increse
 
-void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w = 1);
+void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w);
 
 int functionDownButton = 0;
 int functionUpButton = 0;
@@ -317,12 +315,6 @@ void setup()
   
   Wire.begin();
 
-  // Fix for Brussels/Europe time.
-  if (GMTOffSet == 1)
-  {
-    GMTOffSet = 0;
-  }
-
   if (NTPSyncEnabled)
   {
     WiFiSetup();
@@ -338,9 +330,9 @@ void setup()
   if (EEPROM.read(DegreesFormatEEPROMAddress) == 255) value[DegreesFormatIndex] = CELSIUS; else value[DegreesFormatIndex] = EEPROM.read(DegreesFormatEEPROMAddress);
   if (EEPROM.read(HoursOffsetEEPROMAddress) == 255) value[HoursOffsetIndex] = value[HoursOffsetIndex]; else value[HoursOffsetIndex] = EEPROM.read(HoursOffsetEEPROMAddress) + minValue[HoursOffsetIndex];
   if (EEPROM.read(DateFormatEEPROMAddress) == 255) value[DateFormatIndex] = value[DateFormatIndex]; else value[DateFormatIndex] = EEPROM.read(DateFormatEEPROMAddress);
+  if (EEPROM.read(DSTEEPROMAddress != 0 || DSTEEPROMAddress != 1)) DST = 1;
 
-  Serial.print(F("led lock = "));
-  Serial.println(LEDsLock);
+  Serial.println((String)"LED lock = " + LEDsLock);
 
   pinMode(RedLedPin, OUTPUT);
   pinMode(GreenLedPin, OUTPUT);
@@ -405,7 +397,7 @@ void setup()
   }
   
   // Get clock time that was fetched from the RTC clock
-  Serial.println((String)"Fetched stored RTC timedate = " + RTC_hours + ":" + RTC_minutes + ":" + RTC_seconds + "@" + RTC_day + "-" + RTC_month + "-" + RTC_year);
+  Serial.println((String)"Fetched stored RTC timedate = " + RTC_hours + ":" + RTC_minutes + ":" + RTC_seconds + "@" + RTC_day + "-" + RTC_month + "-" + RTC_year + " | DoW = " + RTC_day_of_week);
   
   // Set clock time that was fetched from the RTC clock
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
@@ -424,9 +416,10 @@ unsigned long prevTime4FireWorks = 0; //time of last RGB changed
 ***************************************************************************************************************/
 void loop()
 {
-  // synchronize RTC with nixies(clock) every 60 seconds (60UL x 1000UL = 60 seconds)
+  // If Real Time Clock is present
   if(RTC_present)
   {
+    // Synchronize RTC with nixies(clock) every 60 seconds (60UL x 1000UL = 60 seconds)
     if ((millis() - previousMillis_1) >= (60UL * 1000UL))
     {
       // Reset previousMillis to current millis
@@ -451,8 +444,8 @@ void loop()
       setNTPTime();
     }
     
-    //synchronize with NTP every 5 minutes (300UL * 1000UL)
-    else if ((millis() - previousMillis_2) >= (300UL * 1000UL))
+    //synchronize with NTP every 1.5 minutes (90UL * 1000UL)
+    else if ((millis() - previousMillis_2) >= (90UL * 1000UL))
     {
       // Reset previousMillis to current millis
       previousMillis_2 = millis();
@@ -462,11 +455,16 @@ void loop()
       setNTPTime();
     }
   }
-  else if (NTPRetryFailed)
+  else if (!NTPSyncEnabled || NTPRetryFailed)
   {
+    NTPRetryCount = 0;
+    NTPRetryFailed = false;
+    
     if (gps.available(Serial1))
     {
       fix = gps.read();
+      
+      fix.dateTime.set_day();
       gpsConnect = true;
     }
     else
@@ -528,20 +526,13 @@ void loop()
     p = 0; //shut off music )))
     tone1.play(1000, 100);
     enteringEditModeTime = millis();
-    /*if (value[DateFormatIndex] == US_DateFormat)
-      {
-      //if (menuPosition == )
-      } else */
+
     menuPosition = menuPosition + 1;
 
     if (menuPosition == LastParent + 1)
     {
       menuPosition = TimeIndex;
     }
-    Serial.print(F("menuPosition="));
-    Serial.println(menuPosition);
-    Serial.print(F("value="));
-    Serial.println(value[menuPosition]);
 
     blinkMask = blinkPattern[menuPosition];
     if ((parent[menuPosition - 1] != 0) and (lastChild[parent[menuPosition - 1] - 1] == (menuPosition - 1))) //exit from edit mode
@@ -556,15 +547,16 @@ void loop()
       if (menuPosition == TimeIndex)
       {
         setTime(value[TimeHoursIndex], value[TimeMintuesIndex], value[TimeSecondsIndex], day(), month(), year());
+        Serial.println(F("menuPosition = TimeIndex"));
       }
       else if (menuPosition == DateIndex)
       {
-        Serial.print("Day:");
-        Serial.println(value[DateDayIndex]);
-        Serial.print("Month:");
-        Serial.println(value[DateMonthIndex]);
+        Serial.println((String)"Day: " + value[DateDayIndex]);
+        Serial.println((String)"Month: " + value[DateMonthIndex]);
         setTime(hour(), minute(), second(), value[DateDayIndex], value[DateMonthIndex], 2000 + value[DateYearIndex]);
+        
         EEPROM.write(DateFormatEEPROMAddress, value[DateFormatIndex]);
+        Serial.println(F("menuPosition = DateIndex"));
       }
       else if (menuPosition == AlarmIndex)
       {
@@ -572,29 +564,33 @@ void loop()
         EEPROM.write(AlarmTimeEEPROMAddress + 1, value[AlarmMinuteIndex]);
         EEPROM.write(AlarmTimeEEPROMAddress + 2, value[AlarmSecondIndex]);
         EEPROM.write(AlarmArmedEEPROMAddress, value[Alarm01]);
+        Serial.println(F("menuPosition = AlarmIndex"));
       }
       else if (menuPosition == hModeIndex)
       {
         EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
+        Serial.println(F("menuPosition = hModeIndex"));
       }
       else if (menuPosition == TemperatureIndex)
       {
         EEPROM.write(DegreesFormatEEPROMAddress, value[DegreesFormatIndex]);
+        Serial.println(F("menuPosition = TemperatureIndex"));
       }
       else if (menuPosition == TimeZoneIndex)
       {
         EEPROM.write(HoursOffsetEEPROMAddress, value[HoursOffsetIndex] - minValue[HoursOffsetIndex]);
+        Serial.println(F("menuPosition = TimeZoneIndex"));
       }
       
       // Set time
-      setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+      setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, weekday());
       
       // End and exit from edit mode
       return;
     }
     
-    Serial.print((String)"menu position = " + menuPosition);
-    Serial.print((String)"DateFormat = " + value[DateFormatIndex]);
+    Serial.println((String)"Menu position = " + menuPosition);
+    Serial.println((String)"Date format = " + value[DateFormatIndex]);
 
     if ((menuPosition != HoursOffsetIndex) && (menuPosition != DateFormatIndex) && (menuPosition != DateDayIndex))
     {
@@ -612,6 +608,7 @@ void loop()
       if (menuPosition == TimeIndex)
       {
         stringToDisplay = PreZero(hour()) + PreZero(minute()) + PreZero(second()); //temporary enabled 24 hour format while settings
+        Serial.println(F("menuPosition = TimeIndex"));
       }
     }
     if (menuPosition == DateIndex)
@@ -623,17 +620,21 @@ void loop()
       if (value[DateFormatIndex] == EU_DateFormat)
       {
         stringToDisplay = PreZero(value[DateDayIndex]) + PreZero(value[DateMonthIndex]) + PreZero(value[DateYearIndex]);
+        Serial.println(F("menuPosition = DateFormatIndex"));
       }
       else
       {
         stringToDisplay = PreZero(value[DateMonthIndex]) + PreZero(value[DateDayIndex]) + PreZero(value[DateYearIndex]);
+        Serial.println(F("menuPosition = DateMonthIndex"));
       }
       Serial.println((String)"String to display = " + stringToDisplay);
     }
     menuPosition = firstChild[menuPosition];
     if (menuPosition == AlarmHourIndex)
     {
-      value[Alarm01] = 1; /*digitalWrite(pinUpperDots, HIGH);*/dotPattern = B10000000;
+      value[Alarm01] = 1; 
+      /*digitalWrite(pinUpperDots, HIGH);*/
+      dotPattern = B10000000;
     }
     editMode = !editMode;
     blinkMask = blinkPattern[menuPosition];
@@ -694,17 +695,16 @@ void loop()
     if (!editMode)
     {
       LEDsLock = true;
+      
       EEPROM.write(LEDsLockEEPROMAddress, 1);
       EEPROM.write(LEDsRedValueEEPROMAddress, RedLight);
       EEPROM.write(LEDsGreenValueEEPROMAddress, GreenLight);
       EEPROM.write(LEDsBlueValueEEPROMAddress, BlueLight);
-      Serial.println(F("Store to EEPROM:"));
-      Serial.print(F("RED="));
-      Serial.println(RedLight);
-      Serial.print(F("GREEN="));
-      Serial.println(GreenLight);
-      Serial.print(F("Blue="));
-      Serial.println(BlueLight);
+      
+      Serial.println(F("Store LED color to EEPROM:"));
+      Serial.println((String)"RED = " + RedLight);
+      Serial.println((String)"GREEN = " + GreenLight);
+      Serial.println((String)"BLUE = " + BlueLight);
     }
   }
 
@@ -778,7 +778,7 @@ void loop()
       checkAlarmTime();
       break;
       
-    case hModeIndex: //12/24 hours mode
+    case hModeIndex: // 12/24 hours mode
       stringToDisplay = "00" + String(value[hModeValueIndex]) + "00";
       blankMask = B00110011;
       dotPattern = B00000000; //turn off all dots
@@ -904,13 +904,11 @@ String getTimeNow()
 
 void doTest()
 {
-  Serial.print(F("Firmware version: "));
-  Serial.println(FirmwareVersion.substring(1, 2) + "." + FirmwareVersion.substring(2, 5));
-  Serial.print(F("Hardware version: "));
-  Serial.println(HardwareVersion);
+  Serial.println((String)"Firmware version = " + FirmwareVersion.substring(1, 2) + "." + FirmwareVersion.substring(2, 5));
+  Serial.println((String)"Hardware version: " + HardwareVersion);
   Serial.println(F("Start Test"));
 
-  // comment below to stop music during testing...
+  // comment below 3 lines to stop music during testing...
   Serial.println(F("Music Test"));
   p = song;
   parseSong(p);
@@ -981,7 +979,7 @@ void doTest()
   }
 
   Serial.println(F("Stop Test"));
-  // while(1);
+  Serial.println(F("\n"));
 }
 
 void doDotBlink()
@@ -998,6 +996,7 @@ void doDotBlink()
   }
 }
 
+// setRTCDateTime(hour, minute, second, day, month, year, weekday);
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
 {
   Wire.beginTransmission(DS1307_ADDRESS);
@@ -1039,7 +1038,7 @@ void getRTCTime()
   RTC_seconds = bcdToDec(Wire.read());
   RTC_minutes = bcdToDec(Wire.read());
   RTC_hours = bcdToDec(Wire.read() & 0b111111); //24 hour time
-  RTC_day_of_week = bcdToDec(Wire.read()); //0-6 -> Sunday - Saturday, 1 = Monday
+  RTC_day_of_week = bcdToDec(Wire.read()); // day of the week (1-7), Sunday is day 1
   RTC_day = bcdToDec(Wire.read());
   RTC_month = bcdToDec(Wire.read());
   RTC_year = bcdToDec(Wire.read());
@@ -1314,7 +1313,7 @@ void incrementValue()
     {
       injectDigits(blinkMask, value[menuPosition]);
     }
-    Serial.print((String)"value = " + value[menuPosition]);
+    Serial.println((String)"value = " + value[menuPosition]);
   }
 }
 
@@ -1352,8 +1351,7 @@ void dicrementValue()
     {
       injectDigits(blinkMask, value[menuPosition]);
     }
-    Serial.print(F("value="));
-    Serial.println(value[menuPosition]);
+    Serial.println((String)"Value = " + value[menuPosition]);
   }
 }
 
@@ -1399,7 +1397,7 @@ void modesChanger()
       menuPosition = DateIndex;
       modesChangePeriod = dateModePeriod;
     }
-    else if (transnumber == 1)
+    if (transnumber == 1)
     {
       menuPosition = TemperatureIndex;
       modesChangePeriod = dateModePeriod;
@@ -1408,7 +1406,7 @@ void modesChanger()
         transnumber = 2;
       }
     }
-    else if (transnumber == 2)
+    if (transnumber == 2)
     {
       menuPosition = TimeIndex;
       modesChangePeriod = timeModePeriod;
@@ -1573,35 +1571,32 @@ float getTemperature (boolean bTempFormat)
 
 void SyncWithGPS()
 {
-  // Play a tone when updating with GPS since this is the backup timesync
-  tone1.play(2000, 100);
-  Serial.println(F("Updating time GPS..."));
-  Serial.print(F("UTC Hour(s) = "));
-  Serial.println(fix.dateTime.hours);
-  Serial.print(F("UTC Minute(s) = "));
-  Serial.println(fix.dateTime.minutes);
-  Serial.print(F("Second(s) = "));
-  Serial.println(fix.dateTime.seconds);
+  Serial.println((String)"Current time updated with GPS = " + fix.dateTime.hours + ":" + fix.dateTime.minutes + ":" + fix.dateTime.seconds + "@" + fix.dateTime.date + "-" + fix.dateTime.month + "-" + fix.dateTime.year + " | DoW = " + fix.dateTime.day);
 
-  //setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
+  // Set the fetched GPS time into the Nixies
   setTime(fix.dateTime.hours, fix.dateTime.minutes, fix.dateTime.seconds, fix.dateTime.date, fix.dateTime.month, fix.dateTime.year);
-  
+
   // Adjust time with 1 if drift is >= 500 to compensate for GPS drifting
-  if (gps.UTCms() >= 500)
+  if (gps.UTCms()>=500)
   {
+    Serial.println(F("Drift adjusted"));
     adjustTime(1);
   }
+
+  Serial.println(F("updateDST in GPS"));
+  updateDST();
   
-  adjustTime((long)value[HoursOffsetIndex] * 3600);
-  setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+  Serial.println((String)"Offset + DST = " + (value[HoursOffsetIndex] + DST));
+  adjustTime((long)(value[HoursOffsetIndex] + DST) * 3600);
+
+  Serial.println(F("setRTCDateTime in GPS"));
+  setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, weekday());
+  
   GPS_Sync_Flag = 1;
   Last_Time_GPS_Sync = millis();
 
-  // Reset the NTP bools
-  NTPRetryFailed = false;
-  NTPSyncEnabled = true;
-
-  //Serial.println(F("Out of SyncWithGPS"));
+  Serial.println(F("Done with GPS Sync"));
+  Serial.println(F("\n"));
 }
 
 void GPSCheckValidity()
@@ -1616,19 +1611,23 @@ void GPSCheckValidity()
     return;
   }
 
-  else if ((fix.dateTime.seconds < 0) || (fix.dateTime.seconds > 59)){
+  else if ((fix.dateTime.seconds < 0) || (fix.dateTime.seconds > 59))
+  {
     return;
   }
 
-  else if ((fix.dateTime.date < 0) || (fix.dateTime.date > 31)){
+  else if ((fix.dateTime.date < 0) || (fix.dateTime.date > 31))
+  {
     return;
   }
 
-  else if ((fix.dateTime.month < 0) || (fix.dateTime.month > 12)){
+  else if ((fix.dateTime.month < 0) || (fix.dateTime.month > 12))
+  {
     return;
   }
 
-  else if ((fix.dateTime.full_year() < 2020) || (fix.dateTime.full_year() > 2030)){
+  else if ((fix.dateTime.full_year() < 2020) || (fix.dateTime.full_year() > 2030))
+  {
     return;
   }
 
@@ -1698,8 +1697,7 @@ void testDS3231TempSensor()
 
   Wire.requestFrom(DS1307_ADDRESS, 2);
   DS3231InternalTemperature = Wire.read();
-  Serial.print(F("DS3231_T="));
-  Serial.println(DS3231InternalTemperature);
+  Serial.println((String)"DS3231_T = " + DS3231InternalTemperature);
   if ((DS3231InternalTemperature < 5) || (DS3231InternalTemperature > 60))
   {
     Serial.println(F("Faulty DS3231!"));
@@ -1762,108 +1760,70 @@ void WiFiSetup()
 // ************
 time_t getNTPTime()
 {
-  // Reset NTP package validity
-  NTP_Package_Valid = false;
-
-  // Reset timeOffset
-  timeOffset = 0;
-
   // Request UDP NTP package
   sendNTPpacket(timeServer);
+
+  Serial.println(F("\n"));
 
   // Wait for package retrieval
   Serial.println(F("Retrieving UDP packages"));
   unsigned long startMs = millis();
   while (!Udp.available() && (millis() - startMs) < UDP_TIMEOUT) {}
-  Serial.println(F("Done etrieving UDP packages"));
+  Serial.println(F("Done retrieving UDP packages"));
   
   Serial.println((String)"UDP package size = " + Udp.parsePacket());
 
-  //if (Udp.parsePacket() <- original
   // Only change time if the received UDP package has the same value as the expected package size (48)
-  if (Udp.parsePacket() == NTP_PACKET_SIZE)
+  if (Udp.parsePacket())
   {
-    // UDP package has the correct size
-    NTP_Package_Valid = true;
-
-    // If DST is enabled
-    if (DSTEnabled && NTP_Package_Valid)
-    {
-      Serial.print(F("Current month is = "));
-      Serial.println(RTC_month);
-
-      // No summertime in January, February, November and December
-      if ((RTC_month <= 2) || (RTC_month >= 11))
-      {
-        Serial.println(F("Wintertime, GMT set to +1"));
-        timeOffset = ((GMTOffSet + 1) * 60UL * 60UL);
-      }
-
-////////// Disabled on 2022-03-21 else-if below to fix offset stuck in month bug.
-//      // Summertime in April, May, June, July, August and September
-//      //if ((RTC_month >= 2) && (RTC_month <= 9))
-//      else if ((RTC_month >= 2) && (RTC_month <= 9))
-//      {
-//        Serial.println(F("Summertime, GMT set to +2"));
-//        timeOffset = ((GMTOffSet + 2) * 60UL * 60UL);
-//      }
-//////////
-
-      // Summertime starts on the 21st of March and ends on the 21st of September
-      //if (((RTC_month == 3) && ((RTC_hours + 24 * RTC_day) >= (3 +  24 * (31 - (5 * RTC_year / 4 + 4) % 7)))) || ((RTC_month == 10) && ((RTC_hours + 24 * RTC_day) < (3 +  24 * (31 - (5 * RTC_year / 4 + 1) % 7)))))
-      else if (((RTC_month == 3) && ((RTC_hours + 24 * RTC_day) >= (3 +  24 * (31 - (5 * RTC_year / 4 + 4) % 7)))) || ((RTC_month == 10) && ((RTC_hours + 24 * RTC_day) < (3 +  24 * (31 - (5 * RTC_year / 4 + 1) % 7)))))
-      {
-        Serial.println(F("Summertime, GMT set to +2"));
-        timeOffset = ((GMTOffSet + 2) * 60UL * 60UL);
-      }
-
-      else
-      {
-        Serial.println(F("Wintertime, GMT set to +1"));
-        timeOffset = ((GMTOffSet + 1) * 60UL * 60UL);
-      }
-    }
-
-    // DST is NOT enabled
-    else
-    {
-      Serial.println(F("GMT set to 0, DST not enabled"));
-      timeOffset = (GMTOffSet * 60UL * 60UL);
-    }
-
-    // Reset retry count
-    NTPRetryCount = 0;
-    NTPRetryFailed = false;
-    NTPSyncEnabled = true;
-
     // Process the epoch
-    Udp.read(packetBuffer, NTP_PACKET_SIZE);
-    unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-    unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-    unsigned long secsSince1900 = highWord << 16 | lowWord;
-    const unsigned long seventyYears = 2208988800UL;
-    unsigned long epoch = secsSince1900 - seventyYears + timeOffset;
+    int size = Udp.parsePacket();
+    if (size >= NTP_PACKET_SIZE)
+    {
+      // Reset retry count
+      NTPRetryCount = 0;
+      NTPRetryFailed = false;
 
-    Serial.print((String)"Epoch updated = " + epoch);
-    Serial.println(F("\n"));
+      updateDST();
+    
+      Udp.read(packetBuffer, NTP_PACKET_SIZE);
+      
+//      unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
+//      unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
+//      unsigned long secsSince1900 = highWord << 16 | lowWord;
 
-    return epoch;
+      // convert four bytes starting at location 40 to a long integer
+      unsigned long secsSince1900;
+      secsSince1900 =  (unsigned long)packetBuffer[40] << 24;
+      secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
+      secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
+      secsSince1900 |= (unsigned long)packetBuffer[43];
+      
+      const unsigned long seventyYears = 2208988800UL;
+      unsigned long epoch = secsSince1900 - seventyYears + ((value[HoursOffsetIndex] + DST) * 3600);
+
+      Serial.println((String)"Offset + DST = " + (value[HoursOffsetIndex] + DST));
+      Serial.println((String)"Epoch updated = " + epoch);
+      Serial.println(F("\n"));
+      
+      return epoch;
+    }
   }
 
   // Try again getting new epoch
   else
   {
-    NTP_Package_Valid = false;
-
     NTPRetryCount++;
-    Serial.print(F("NTP Retry count = "));
-    Serial.println(NTPRetryCount);
+    Serial.println((String)"NTP Retry count = " + NTPRetryCount);
 
     // Retry 3 times before returning previous epoch
     if (NTPRetryCount < 3 )
     {
       Serial.println(F("Epoch NOT updated, retrying..."));
+      Serial.println(F("\n"));
+      
       NTPRetryFailed = false;
+      
       getNTPTime();
     }
 
@@ -1871,9 +1831,15 @@ time_t getNTPTime()
     else
     {
       Serial.println(F("Retry failed"));
+      Serial.println(F("\n"));
+      
       NTPRetryCount = 0;
       NTPRetryFailed = true;
-      return;
+      
+      // Play a tone when updating with GPS since this is the backup timesync
+      tone1.play(2000,100);
+      
+      SyncWithGPS();
     }
   }
 }
@@ -1901,31 +1867,32 @@ void setNTPTime()
     {
       NTPRetryCount = 0;
 
-      String tempRTCTime = (String)RTC_hours + ":" + RTC_minutes + ":" + RTC_seconds;
-      String tempNTPTime = (String)hour() + ":" + minute() + ":" + second();
+      setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, weekday());
+      Serial.println(F("Synced current time to RTC"));
 
-      Serial.println("Fetched RTC time = " + tempRTCTime);
-      Serial.println("Fetched NTP time = " + tempNTPTime);
-
-      // Compare drift between RTC and NTP and update RTC or not (prevents excessive writes)
-      if(tempRTCTime != tempNTPTime)
-      {
-        setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
-        Serial.println(F("Synced current time to RTC"));
-      }
-
-      else
-      {
-        Serial.println(F("Time not synced with RTC, RTC and NTP time are the same"));
-      }
+//      String tempRTCTime = (String)RTC_hours + ":" + RTC_minutes + ":" + RTC_seconds;
+//      String tempNTPTime = (String)hour() + ":" + minute() + ":" + second();
+//
+//      Serial.println("Fetched RTC time = " + tempRTCTime);
+//      Serial.println("Fetched NTP time = " + tempNTPTime);
+//
+//      // Compare drift between RTC and NTP and update RTC or not (prevents excessive writes)
+//      if(tempRTCTime != tempNTPTime)
+//      {
+//        setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, weekday());
+//        Serial.println(F("Synced current time to RTC"));
+//      }
+//
+//      else
+//      {
+//        Serial.println(F("Time not synced with RTC, RTC and NTP time are the same"));
+//      }
     }
 
     // Else if an error occured catch it
     else if (NTPRetryFailed == true)
     {
-      NTP_Package_Valid = false;
       NTPRetryFailed = true;
-
       Serial.println(F("Time failed updating with NTP!"));
     }
 
@@ -1952,4 +1919,48 @@ void sendNTPpacket(char *ntpSrv)
   Udp.beginPacket(ntpSrv, 123); // NTP requests are to port 123
   Udp.write(packetBuffer, NTP_PACKET_SIZE);
   Udp.endPacket();
+}
+
+void updateDST()
+{
+  // If DST is enabled
+  if (DSTEnabled)
+  {
+    // For testing
+    //Serial.println((String)"Current weekday is = " + weekday());
+    //Serial.println((String)"Current month is = " + month());
+    //Serial.println((String)"Current day is = " + day());
+    //Serial.println((String)"Current hour is = " + hour());
+    //Serial.println((String)"Current DST is = " + DST);
+
+    if (weekday() == 7 && month() == 3 && day() >= 25 && hour() == 2 && DST==0)
+    {
+      // Set the clock 1 hour forward
+      DST = 1;
+      EEPROM.write(DSTEEPROMAddress, DST);
+      Serial.println(F("Summertime, GMT set to +2"));
+    }
+
+    else if (weekday() == 7 && month() == 10 && day() >= 25 && hour() == 3 && DST==1)
+    {
+      // Set the clock 1 hour back (or on original GMT time)
+      DST = 0;
+      EEPROM.write(DSTEEPROMAddress, DST);
+      Serial.println(F("Wintertime, GMT set to +1"));
+    }
+    
+    else
+    {
+      // Set the clock according to the stored DST
+      Serial.println(F("DST enabled but not changed"));
+    }
+  }
+
+  // DST is NOT enabled
+  else
+  {
+    DST = 0;
+    EEPROM.write(DSTEEPROMAddress, DST);
+    Serial.println(F("Using GMT, DST not enabled"));
+  }
 }
